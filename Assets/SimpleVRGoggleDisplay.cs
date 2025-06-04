@@ -5,6 +5,11 @@ using TMPro;
 
 public class SimpleVRGoggleDisplay : MonoBehaviour
 {
+    [Header("Fixation Point")]
+    public string fixationSymbol = "+";
+    public float fixationSize = 0.05f;
+    private GameObject fixationPoint;
+
     [Header("VR Goggles Settings")]
     public bool enableStereoView = true;
     public float eyeSeparation = 0.064f;
@@ -46,6 +51,7 @@ public class SimpleVRGoggleDisplay : MonoBehaviour
     {
         SetupStereoCameras();
         SetupPeripheralChart();
+        CreateFixationPoint();
         DisplayChart();
         StartCoroutine(InitializeAndStartSequence());
 
@@ -72,6 +78,13 @@ public class SimpleVRGoggleDisplay : MonoBehaviour
 
             if (rightEyeCamera != null)
                 rightEyeCamera.transform.localRotation = correctedRotation;
+            
+            if (fixationPoint != null)
+            {
+                fixationPoint.transform.LookAt(leftEyeCamera.transform);
+                fixationPoint.transform.Rotate(0, 180, 0);
+            }
+
         }
     }
 
@@ -247,4 +260,20 @@ public class SimpleVRGoggleDisplay : MonoBehaviour
         }
         return "";
     }
+    void CreateFixationPoint()
+    {
+        fixationPoint = new GameObject("FixationPoint");
+        TextMeshPro textMesh = fixationPoint.AddComponent<TextMeshPro>();
+
+        textMesh.text = fixationSymbol;
+        textMesh.fontSize = fixationSize * 100;
+        textMesh.color = letterColor;
+        textMesh.alignment = TextAlignmentOptions.Center;
+        textMesh.fontStyle = FontStyles.Bold;
+
+        fixationPoint.transform.position = fixedPosition + new Vector3(0, 0, distanceFromPlayer);
+        fixationPoint.transform.LookAt(leftEyeCamera.transform);
+        fixationPoint.transform.Rotate(0, 180, 0);
+    }
+
 }
