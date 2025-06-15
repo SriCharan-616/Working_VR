@@ -599,7 +599,7 @@ MonoBehaviour:
   letterColor: {r: 0, g: 0, b: 0, a: 1}
   displayInterval: 2
   intervalBetweenLetters: 0.5
-  minSize: 0.03
+  minSize: 0.05
   maxSize: 0.08
   randomizeSize: 1
 --- !u!4 &1006927524
