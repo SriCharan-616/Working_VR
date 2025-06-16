@@ -71,6 +71,9 @@ public class VRVoiceChartManager : MonoBehaviour
     {
         Debug.Log("VRVoiceChartManager Start() ");
 
+        // Initialize LetterLogManager first
+        InitializeLetterLogManager();
+
         SetupStereoCameras();
         SetupPeripheralChart();
         CreateFixationPoint();
@@ -97,6 +100,21 @@ public class VRVoiceChartManager : MonoBehaviour
         }
 
         Debug.Log("VRVoiceChartManager Start() Complete ");
+    }
+
+    void InitializeLetterLogManager()
+    {
+        // Ensure LetterLogManager exists in the scene
+        if (LetterLogManager.Instance == null)
+        {
+            GameObject logManagerObj = new GameObject("LetterLogManager");
+            logManagerObj.AddComponent<LetterLogManager>();
+            Debug.Log("LetterLogManager created and initialized");
+        }
+        else
+        {
+            Debug.Log("LetterLogManager already exists");
+        }
     }
 
     void InitializeVoiceSystem()
@@ -441,7 +459,6 @@ public class VRVoiceChartManager : MonoBehaviour
         Vector3 relativePos = new Vector3(x, y, z);
         Vector3 worldPos = fixedPosition + relativePos;
 
-
         return worldPos;
     }
 
@@ -473,6 +490,13 @@ public class VRVoiceChartManager : MonoBehaviour
                 instantiatedLetters[currentIndex].SetActive(true);
 
                 Debug.Log($"Displaying letter #{currentIndex}: {currentlyDisplayedLetter}");
+
+                // Log the displayed letter using LetterLogManager
+                if (LetterLogManager.Instance != null)
+                {
+                    LetterLogManager.Instance.LogDisplayedLetter(currentlyDisplayedLetter);
+                }
+
                 LogCurrentDisplayAndSpoken();
             }
             else
@@ -542,6 +566,13 @@ public class VRVoiceChartManager : MonoBehaviour
 
             if (buttonText != null) buttonText.text = "Start Test";
             if (buttonTextTMP != null) buttonTextTMP.text = "Start Test";
+        }
+
+        // Print final log content
+        if (LetterLogManager.Instance != null)
+        {
+            Debug.Log("📜 Final Log Content:\n" + LetterLogManager.Instance.GetLogContent());
+            Debug.Log("📁 Log file saved at: " + LetterLogManager.Instance.GetLogFilePath());
         }
 
         Debug.Log("TEST SEQUENCE STOPPED ");
@@ -700,7 +731,7 @@ public class VRVoiceChartManager : MonoBehaviour
 
         if (string.IsNullOrEmpty(result))
         {
-            Debug.LogWarning(" Speech result is empty or null");
+            Debug.LogWarning("Speech result is empty or null");
             return;
         }
 
@@ -708,7 +739,13 @@ public class VRVoiceChartManager : MonoBehaviour
         LogCurrentDisplayAndSpoken();
         Debug.Log("Processed spoken letter: '" + lastSpokenLetter + "'");
 
-        // Use coroutine for thread-safe file operations
+        // Log spoken letter using LetterLogManager
+        if (LetterLogManager.Instance != null)
+        {
+            LetterLogManager.Instance.LogSpokenLetter(lastSpokenLetter);
+        }
+
+        // Keep legacy file logging for backward compatibility
         StartCoroutine(SaveToFileCoroutine(lastSpokenLetter, currentlyDisplayedLetter));
 
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -842,6 +879,20 @@ public class VRVoiceChartManager : MonoBehaviour
             }
         }
         Debug.Log("=== END DEBUG ===");
+    }
+
+    // Method to get current log data for debugging
+    [ContextMenu("Show Current Log")]
+    void ShowCurrentLog()
+    {
+        if (LetterLogManager.Instance != null)
+        {
+            Debug.Log("📜 Current Log Content:\n" + LetterLogManager.Instance.GetLogContent());
+        }
+        else
+        {
+            Debug.LogWarning("LetterLogManager instance not found");
+        }
     }
 
     #endregion
