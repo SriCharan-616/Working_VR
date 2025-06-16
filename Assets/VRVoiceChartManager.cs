@@ -18,6 +18,7 @@ public class VRVoiceChartManager : MonoBehaviour
     private AndroidJavaObject voiceBridge;
     private AndroidJavaObject unityActivity;
     private bool voiceSystemInitialized = false;
+    private bool isRestartingVoice = false; // Added to prevent multiple restart attempts
     #endregion
 
     #region --- VR Goggle Settings ---
@@ -173,41 +174,85 @@ public class VRVoiceChartManager : MonoBehaviour
 
                 if (buttonText != null)
                 {
-                    buttonText.text = "Running...";
+                    buttonText.text = "Preparing...";
                     Debug.Log("Updated Text component");
                 }
                 if (buttonTextTMP != null)
                 {
-                    buttonTextTMP.text = "Running...";
+                    buttonTextTMP.text = "Preparing...";
                     Debug.Log("Updated TextMeshProUGUI component");
                 }
-
-                // Also try hiding the button completely
-                startButton.gameObject.SetActive(false);
-                Debug.Log("Button hidden");
             }
 
-            // Clear any existing letters first
-            ClearExistingLetters();
+            // Start the preparation sequence with 15-second delay
+            StartCoroutine(PrepareAndStartTest());
 
-            // Display the chart
-            DisplayChart();
-
-            // Reset index
-            currentIndex = 0;
-
-            // Start the letter sequence
-            StartCoroutine(ShowLettersOneByOne());
-
-            // Start voice recognition
-            StartVoiceRecognition();
-
-            Debug.Log("TEST SEQUENCE STARTED ");
+            Debug.Log("TEST SEQUENCE INITIATED - 15 second delay started");
         }
         else
         {
             Debug.Log("Test sequence already running");
         }
+    }
+
+    // New coroutine to handle the 15-second delay
+    IEnumerator PrepareAndStartTest()
+    {
+        // Show countdown to user (optional)
+        for (int i = 15; i > 0; i--)
+        {
+            if (startButton != null)
+            {
+                Text buttonText = startButton.GetComponentInChildren<Text>();
+                TextMeshProUGUI buttonTextTMP = startButton.GetComponentInChildren<TextMeshProUGUI>();
+
+                string countdownText = $"Starting in {i}...";
+
+                if (buttonText != null)
+                    buttonText.text = countdownText;
+                if (buttonTextTMP != null)
+                    buttonTextTMP.text = countdownText;
+            }
+
+            Debug.Log($"Test starting in {i} seconds...");
+            yield return new WaitForSeconds(1f);
+        }
+
+        // Now start the actual test
+        Debug.Log("15-second delay complete - starting test now");
+
+        // Update button to show running state
+        if (startButton != null)
+        {
+            Text buttonText = startButton.GetComponentInChildren<Text>();
+            TextMeshProUGUI buttonTextTMP = startButton.GetComponentInChildren<TextMeshProUGUI>();
+
+            if (buttonText != null)
+                buttonText.text = "Running...";
+            if (buttonTextTMP != null)
+                buttonTextTMP.text = "Running...";
+
+            // Hide the button completely
+            startButton.gameObject.SetActive(false);
+            Debug.Log("Button hidden");
+        }
+
+        // Clear any existing letters first
+        ClearExistingLetters();
+
+        // Display the chart
+        DisplayChart();
+
+        // Reset index
+        currentIndex = 0;
+
+        // Start the letter sequence
+        StartCoroutine(ShowLettersOneByOne());
+
+        // Start voice recognition
+        StartVoiceRecognition();
+
+        Debug.Log("TEST SEQUENCE FULLY STARTED AFTER 15 SECOND DELAY");
     }
 
     void StartVoiceRecognition()
@@ -396,7 +441,6 @@ public class VRVoiceChartManager : MonoBehaviour
         Vector3 relativePos = new Vector3(x, y, z);
         Vector3 worldPos = fixedPosition + relativePos;
 
-        Debug.Log($"Polar ({ecc}°, {mer}°) -> Relative ({relativePos}) -> World ({worldPos})");
 
         return worldPos;
     }
@@ -539,7 +583,7 @@ public class VRVoiceChartManager : MonoBehaviour
             return;
         }
 
-        if (!isListening && voiceBridge != null)
+        if (!isListening && voiceBridge != null && !isRestartingVoice)
         {
             try
             {
@@ -559,6 +603,8 @@ public class VRVoiceChartManager : MonoBehaviour
                 Debug.LogWarning("Already listening");
             if (voiceBridge == null)
                 Debug.LogError("VoiceBridge is null!");
+            if (isRestartingVoice)
+                Debug.LogWarning("Voice restart already in progress");
         }
         
         Debug.Log("END START LISTENING ");
@@ -584,6 +630,32 @@ public class VRVoiceChartManager : MonoBehaviour
         {
             Debug.LogError("Microphone permission denied or timeout");
         }
+    }
+
+    // MODIFIED: Better restart handling
+    IEnumerator RestartVoiceRecognition()
+    {
+        if (isRestartingVoice)
+        {
+            Debug.LogWarning("Voice restart already in progress");
+            yield break;
+        }
+
+        isRestartingVoice = true;
+        isListening = false;
+        
+        Debug.Log("Restarting voice recognition...");
+        
+        // Wait a bit before restarting
+        yield return new WaitForSeconds(0.5f);
+        
+        // Only restart if we're still displaying and have a valid bridge
+        if (isDisplaying && voiceBridge != null)
+        {
+            StartListening();
+        }
+        
+        isRestartingVoice = false;
     }
 #endif
 
@@ -640,11 +712,11 @@ public class VRVoiceChartManager : MonoBehaviour
         StartCoroutine(SaveToFileCoroutine(lastSpokenLetter, currentlyDisplayedLetter));
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        isListening = false;
-        Debug.Log("Setting isListening to false, will restart in 1 second");
-        
-        // Restart listening after a brief delay
-        Invoke(nameof(StartListening), 1f);
+        // MODIFIED: Use the new restart coroutine
+        if (isDisplaying)
+        {
+            StartCoroutine(RestartVoiceRecognition());
+        }
 #endif
 
         Debug.Log("SPEECH RESULT END ");
@@ -685,11 +757,33 @@ public class VRVoiceChartManager : MonoBehaviour
         
         isListening = false;
         
-        // Try to restart listening after error
-        Debug.Log("Attempting to restart listening after error...");
-        Invoke(nameof(StartListening), 2f);
+        // MODIFIED: Use the new restart coroutine and add error-specific handling
+        if (isDisplaying)
+        {
+            Debug.Log("Attempting to restart listening after error...");
+            
+            // Different restart delays based on error type
+            float restartDelay = 1f;
+            if (error.Contains("busy") || error.Contains("timeout"))
+            {
+                restartDelay = 2f; // Longer delay for busy/timeout errors
+            }
+            
+            StartCoroutine(RestartAfterError(restartDelay));
+        }
         
         Debug.Log("END SPEECH ERROR ");
+    }
+
+    // ADDED: New coroutine for error-based restart
+    IEnumerator RestartAfterError(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        
+        if (isDisplaying && !isRestartingVoice)
+        {
+            StartCoroutine(RestartVoiceRecognition());
+        }
     }
 #endif
 
